@@ -74,30 +74,39 @@ class VacationPlannerCard extends HTMLElement {
 
   _fetchAndRender() {
     if (this._debounce) clearTimeout(this._debounce);
+    // Fetch-Generation: Token verhindert, dass ein langsamer älterer fetch
+    // nach einem neueren fetch mit veralteten Items rendert.
+    this._fetchGen = (this._fetchGen || 0) + 1;
+    const gen = this._fetchGen;
     this._debounce = setTimeout(async () => {
       this._debounce = null;
       await this._fetchItems(this._hass);
-      this._render();
+      if (gen === this._fetchGen) this._render();
     }, 0);
   }
 
   _subscribe() {
     if (this._unsub || !this._hass || !this.isConnected) return;
     const ids = this.config.lists.map(l => l.entity);
-    this._hass.connection.subscribeMessage(
+    // _unsub hält das Promise aus subscribeMessage/subscribeEvents; so geht
+    // kein Unsub verloren, falls disconnectedCallback() vor dem Resolve feuert.
+    this._unsub = this._hass.connection.subscribeMessage(
       () => this._fetchAndRender(),
       { type: "subscribe_entities", entity_ids: ids }
-    ).then(unsub => { this._unsub = unsub; })
-     .catch(() => {
-       this._unsub = this._hass.connection.subscribeEvents(ev => {
-         if (ids.includes(ev?.data?.entity_id)) this._fetchAndRender();
-       }, "state_changed");
-     });
+    ).catch(() => {
+      // Fallback: state_changed-Events (ältere HA-Versionen / Kompatibilität)
+      return this._hass.connection.subscribeEvents(ev => {
+        if (ids.includes(ev?.data?.entity_id)) this._fetchAndRender();
+      }, "state_changed").catch(e => console.warn("Vacation Planner: state_changed fallback failed", e));
+    });
   }
 
   connectedCallback() { if (this._hass) this._subscribe(); }
   disconnectedCallback() {
-    if (this._unsub) { Promise.resolve(this._unsub).then(fn => fn()); this._unsub = null; }
+    if (this._unsub) {
+      Promise.resolve(this._unsub).then(fn => { if (typeof fn === "function") fn(); });
+      this._unsub = null;
+    }
   }
 
   // --- Aktionen -------------------------------------------------------------
@@ -278,5 +287,4 @@ window.customCards.push({
   type: "vacation-planner",
   name: "Vacation Planner",
   description: "Urlaubs-Checklisten (Packliste + Todos) als realtime, mehrgeräte-fähige Card via HA todo.",
-  documentationURL: "https://example.com/vacation-planner",
 });

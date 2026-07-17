@@ -6,7 +6,7 @@ A Home Assistant Lovelace custom card for planning and tracking a vacation
 natively inside Home Assistant — built on HA's native `todo` platform for
 realtime, multi-device checklist sync.
 
-> Status: **Entwurf / in Planung** – Card-Logik folgt nach Design-Freigabe.
+> Status: **Implementiert** – die Card ist einsatzbereit, als inline-Ressource in Home Assistant registriert und das Repo ist HACS-konform für die Verteilung via GitHub vorbereitet.
 
 ## Installation
 
