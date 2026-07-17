@@ -1,0 +1,8 @@
+{
+  "name": "Vacation Planner",
+  "render_readme": true,
+  "filename": "vacation-planner.js",
+  "content_in_root": true,
+  "country": ["DE"],
+  "homeassistant": "2024.1.0"
+}

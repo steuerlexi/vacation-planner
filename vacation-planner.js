@@ -109,11 +109,14 @@ class VacationPlannerCard extends HTMLElement {
   _toggle(entity, item) {
     if (!this._hass) return;
     const status = item.status === "completed" ? "needs_action" : "completed";
-    this._call("todo", "update_item", { entity_id: entity, item: item.summary, status });
+    // Bevorzugt uid (stabil, HA 2024.7+), Fallback summary für ältere Versionen
+    const id = item.uid || item.summary;
+    this._call("todo", "update_item", { entity_id: entity, item: id, status });
   }
   _remove(entity, item) {
     if (!this._hass) return;
-    this._call("todo", "remove_item", { entity_id: entity, item: item.summary });
+    const id = item.uid || item.summary;
+    this._call("todo", "remove_item", { entity_id: entity, item: id });
   }
   _clearDone(entity) {
     if (!this._hass) return;
@@ -127,7 +130,11 @@ class VacationPlannerCard extends HTMLElement {
     const root = this.attachShadow ? this._shadowRoot || this._ensureShadow()
                                     : this;
     // Wir verwenden ein Shadow-DOM für sauberes Styling mit HA-Variablen.
-    root.innerHTML = "";
+    // Nur den Content-Container entfernen, nicht das ganze Shadow-Root —
+    // sonst würde der in _ensureShadow()/_injectStyles() einmalig injizierte
+    // <style>-Block (HA-CSS-Variablen) bei jedem Re-Render gelöscht.
+    const oldContent = root.querySelector(".vp-card");
+    if (oldContent) oldContent.remove();
     const wrap = document.createElement("div");
     wrap.className = "vp-card";
     const title = document.createElement("div");
