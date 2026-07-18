@@ -8,6 +8,38 @@ class VacationPlannerCard extends HTMLElement {
     this._rendering = false;
   }
 
+  // Kategorie -> Emoji. Die Items tragen aus der Migration den Prefix
+  // "[Kategorie] Text"; das Emoji macht die Kategorie sichtbar, ohne dass
+  // der Prefix als Text gezeigt werden muss — aufgeräumt wie eine
+  // Shopping-Card, aber mit aussagekräftigem Icon je Eintrag.
+  // Lookup-Keys sind normalisiert (lowercase, getrimmt, Whitespace kollabiert).
+  static CATEGORY_EMOJI = {
+    "dokumente & geld": "📄",
+    "kleidung": "👕",
+    "hygiene & gesundheit": "🧴",
+    "technik": "🔌",
+    "reise-spezifisch – skandinavien-roadtrip": "🚗",
+    "mit kindern (5 & 6 j.)": "🧒",
+    "sonstiges": "🎒",
+    "transport buchen": "⛴️",
+    "tickets / aktivitäten vorab buchen": "🎟️",
+    "versicherung & formalia": "🛡️",
+    "organisieren": "📋",
+    "vor abfahrt (19.07.)": "🚦",
+  };
+  static CATEGORY_EMOJI_FALLBACK = "📝";
+
+  // Trennt "[Kategorie] Text" -> { emoji, text }. Items ohne Prefix
+  // bekommen das Fallback-Emoji und werden unverändert ausgegeben.
+  _categoryEmoji(summary) {
+    const m = /^\[([^\]]+)\]\s*(.*)$/.exec(summary || "");
+    if (!m) return { emoji: VacationPlannerCard.CATEGORY_EMOJI_FALLBACK, text: summary || "" };
+    const key = m[1].trim().toLowerCase().replace(/\s+/g, " ");
+    const emoji = VacationPlannerCard.CATEGORY_EMOJI[key]
+      || VacationPlannerCard.CATEGORY_EMOJI_FALLBACK;
+    return { emoji, text: m[2] };
+  }
+
   // --- Config --------------------------------------------------------------
   setConfig(config) {
     if (!config || (!config.entity && !Array.isArray(config.lists))) {
@@ -195,6 +227,8 @@ class VacationPlannerCard extends HTMLElement {
       .vp-item input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--primary-color,#41BDF5); }
       .vp-item span { flex: 1; cursor: pointer; }
       .vp-item.done span { text-decoration: line-through; color: var(--secondary-text-color); }
+      .vp-cat { flex: 0 0 1.4rem; text-align: center; font-size: 1.15rem;
+        line-height: 1; user-select: none; cursor: default; opacity: .95; }
       .vp-del { background: none; border: none; color: var(--secondary-text-color);
         cursor: pointer; font-size: 1.1rem; padding: 0 .25rem; opacity: .5; }
       .vp-del:hover { opacity: 1; color: var(--error-color,#db4437); }
@@ -271,14 +305,20 @@ class VacationPlannerCard extends HTMLElement {
     const cb = document.createElement("input");
     cb.type = "checkbox"; cb.checked = (item.status === "completed");
     cb.addEventListener("change", () => this._toggle(entity, item));
+    // Emoji aus dem [Kategorie]-Prefix + bereinigter Text (ohne Prefix).
+    const { emoji, text } = this._categoryEmoji(item.summary);
+    const emojiEl = document.createElement("span");
+    emojiEl.className = "vp-cat";
+    emojiEl.textContent = emoji;
+    emojiEl.title = item.summary; // vollständiger Originaltext im Tooltip
     const span = document.createElement("span");
-    span.textContent = item.summary;
+    span.textContent = text;
     span.addEventListener("click", () => { cb.checked = !cb.checked; this._toggle(entity, item); });
     const del = document.createElement("button");
     del.type = "button"; del.className = "vp-del"; del.textContent = "✕";
     del.title = "Entfernen";
     del.addEventListener("click", () => this._remove(entity, item));
-    row.appendChild(cb); row.appendChild(span); row.appendChild(del);
+    row.appendChild(cb); row.appendChild(emojiEl); row.appendChild(span); row.appendChild(del);
     return row;
   }
 
