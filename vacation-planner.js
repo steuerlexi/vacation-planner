@@ -8,35 +8,37 @@ class VacationPlannerCard extends HTMLElement {
     this._rendering = false;
   }
 
-  // Kategorie -> buntes Unicode-Emoji. Die Items tragen aus der Migration
-  // den Prefix "[Kategorie] Text"; das Emoji macht die Kategorie sichtbar,
-  // ohne dass der Prefix als Text gezeigt werden muss.
+  // Kategorie -> buntes noto-Icon (Iconify-Set "noto", in HA über
+  // thomasloven/hass-custom_icons als Prefix "noto:" registriert).
+  // Die Items tragen aus der Migration den Prefix "[Kategorie] Text";
+  // das Icon macht die Kategorie sichtbar, ohne dass der Prefix als Text
+  // gezeigt werden muss. Iconnamen via Iconify-API verifiziert.
   // Lookup-Keys sind normalisiert (lowercase, getrimmt, Whitespace kollabiert).
-  static CATEGORY_EMOJI = {
-    "dokumente & geld": "💳",
-    "kleidung": "👕",
-    "hygiene & gesundheit": "🧴",
-    "technik": "🔌",
-    "reise-spezifisch – skandinavien-roadtrip": "🚗",
-    "mit kindern (5 & 6 j.)": "🧒",
-    "sonstiges": "🎒",
-    "transport buchen": "⛴️",
-    "tickets / aktivitäten vorab buchen": "🎟️",
-    "versicherung & formalia": "🛡️",
-    "organisieren": "📋",
-    "vor abfahrt (19.07.)": "🚦",
+  static CATEGORY_ICON = {
+    "dokumente & geld": "noto:credit-card",
+    "kleidung": "noto:t-shirt",
+    "hygiene & gesundheit": "noto:medical-symbol",
+    "technik": "noto:electric-plug",
+    "reise-spezifisch – skandinavien-roadtrip": "noto:sport-utility-vehicle",
+    "mit kindern (5 & 6 j.)": "noto:child",
+    "sonstiges": "noto:package",
+    "transport buchen": "noto:ferry",
+    "tickets / aktivitäten vorab buchen": "noto:admission-tickets",
+    "versicherung & formalia": "noto:shield",
+    "organisieren": "noto:clipboard",
+    "vor abfahrt (19.07.)": "noto:check-mark-button",
   };
-  static CATEGORY_EMOJI_FALLBACK = "📝";
+  static CATEGORY_ICON_FALLBACK = "noto:memo";
 
-  // Trennt "[Kategorie] Text" -> { emoji, text }. Items ohne Prefix
-  // bekommen das Fallback-Emoji und werden unverändert ausgegeben.
-  _categoryEmoji(summary) {
+  // Trennt "[Kategorie] Text" -> { icon, text }. Items ohne Prefix
+  // bekommen das Fallback-Icon und werden unverändert ausgegeben.
+  _categoryIcon(summary) {
     const m = /^\[([^\]]+)\]\s*(.*)$/.exec(summary || "");
-    if (!m) return { emoji: VacationPlannerCard.CATEGORY_EMOJI_FALLBACK, text: summary || "" };
+    if (!m) return { icon: VacationPlannerCard.CATEGORY_ICON_FALLBACK, text: summary || "" };
     const key = m[1].trim().toLowerCase().replace(/\s+/g, " ");
-    const emoji = VacationPlannerCard.CATEGORY_EMOJI[key]
-      || VacationPlannerCard.CATEGORY_EMOJI_FALLBACK;
-    return { emoji, text: m[2] };
+    const icon = VacationPlannerCard.CATEGORY_ICON[key]
+      || VacationPlannerCard.CATEGORY_ICON_FALLBACK;
+    return { icon, text: m[2] };
   }
 
   // --- Config --------------------------------------------------------------
@@ -217,22 +219,32 @@ class VacationPlannerCard extends HTMLElement {
       .vp-card-content { padding: 0 1rem 1rem; }
       .vp-items { display:grid; grid-template-columns: repeat(auto-fill, minmax(108px,1fr));
         gap:.5rem; }
-      .vp-tile { position:relative; aspect-ratio: 1 / 1; display:flex;
-        flex-direction:column; align-items:center; justify-content:center;
-        gap:.3rem; padding:.6rem .4rem; border-radius:12px;
+      /* Quadratisch ERZWUNGEN: aspect-ratio allein greift nicht, wenn der
+         Label-Text die Kachelhöhe übersteigt. Daher zusätzlich overflow:hidden
+         + min-height:0/min-width:0 (damit Flex-Kinder die Kachel nicht
+         strecken) + appearance:none (Button-Default-Padding/-Border-Rand
+         weg). Der Label bekommt flex:1 + min-height:0 + overflow:hidden,
+         so kollabiert er statt die Kachel zu treiben. */
+      .vp-tile { position:relative; aspect-ratio: 1 / 1; overflow: hidden;
+        -webkit-appearance: none; appearance: none;
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        gap:.25rem; padding:.5rem .35rem; border-radius:12px;
         cursor:pointer; text-align:center; background: var(--card-background-color, #fff);
         border: 1px solid var(--divider-color, #eee);
-        color: var(--primary-text-color); font-size:.8rem; line-height:1.15;
-        box-sizing: border-box;
+        color: var(--primary-text-color); font-size:.78rem; line-height:1.12;
+        box-sizing: border-box; min-height:0; min-width:0;
         transition: border-color .15s, transform .05s; }
       .vp-tile:hover { border-color: var(--primary-color,#41BDF5); }
       .vp-tile:active { transform: scale(.97); }
-      .vp-tile-emoji { font-size: 2rem; line-height:1; }
-      .vp-tile-label { overflow:hidden; display:-webkit-box; -webkit-line-clamp:3;
-        -webkit-box-orient:vertical; word-break: break-word; }
+      /* noto-Icons sind farbige SVGs (kein MDI-Font); --mdc-icon-size steuert
+         die render-Größe des ha-icon. 36px in einer 108px-Kachel wirkt gut. */
+      .vp-tile-icon { --mdc-icon-size: 36px; width:36px; height:36px; flex:0 0 auto; }
+      .vp-tile-label { flex:1 1 auto; min-height:0; overflow:hidden;
+        display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
+        word-break: break-word; }
       .vp-tile.done { opacity:.45; }
       .vp-tile.done .vp-tile-label { text-decoration: line-through; }
-      .vp-tile.done .vp-tile-emoji { filter: grayscale(1); }
+      .vp-tile.done .vp-tile-icon { filter: grayscale(1); }
       .vp-tile-del { position:absolute; top:.15rem; right:.25rem; background:none;
         border:none; color: var(--secondary-text-color); font-size:.7rem;
         opacity:0; cursor:pointer; padding:.1rem; line-height:1; }
@@ -317,18 +329,18 @@ class VacationPlannerCard extends HTMLElement {
   }
 
   _renderTile(entity, item) {
-    // Quadratische Kachel: buntes Kategorie-Emoji + bereinigter Text
+    // Quadratische Kachel: buntes noto-Kategorie-Icon + bereinigter Text
     // (ohne [Kategorie]-Prefix). Klick toggelt erledigt; ✕ entfernt.
-    const { emoji, text } = this._categoryEmoji(item.summary);
+    const { icon, text } = this._categoryIcon(item.summary);
     const done = item.status === "completed";
     const tile = document.createElement("button");
     tile.type = "button";
     tile.className = "vp-tile" + (done ? " done" : "");
     tile.title = item.summary; // vollständiger Originaltext im Tooltip
     tile.addEventListener("click", () => this._toggle(entity, item));
-    const emojiEl = document.createElement("span");
-    emojiEl.className = "vp-tile-emoji";
-    emojiEl.textContent = emoji;
+    const iconEl = document.createElement("ha-icon");
+    iconEl.setAttribute("icon", icon);
+    iconEl.className = "vp-tile-icon";
     const label = document.createElement("span");
     label.className = "vp-tile-label";
     label.textContent = text;
@@ -336,7 +348,7 @@ class VacationPlannerCard extends HTMLElement {
     del.type = "button"; del.className = "vp-tile-del"; del.textContent = "✕";
     del.title = "Entfernen";
     del.addEventListener("click", (e) => { e.stopPropagation(); this._remove(entity, item); });
-    tile.appendChild(emojiEl); tile.appendChild(label); tile.appendChild(del);
+    tile.appendChild(iconEl); tile.appendChild(label); tile.appendChild(del);
     return tile;
   }
 
