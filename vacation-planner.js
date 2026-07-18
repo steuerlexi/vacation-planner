@@ -59,10 +59,15 @@ class VacationPlannerCard extends HTMLElement {
   async _fetchItems(hass) {
     const results = await Promise.all(this.config.lists.map(async (l) => {
       try {
+        // return_response ist ein eigener Parameter von hass.callService
+        // (5. Argument), KEIN Feld in den Service-Daten – sonst meldet HA
+        // "Die Aktion erfordert Antworten und muss mit return_response=True
+        // aufgerufen werden". Response-Form: { response: { <entity_id>:
+        // { items: [...] } }, result: ... }.
         const res = await hass.callService("todo", "get_items",
-          { entity_id: l.entity, return_response: true });
-        const resp = res?.result?.response || res?.response || {};
-        const items = resp[l.entity]?.items || [];
+          { entity_id: l.entity }, {}, true);
+        const resp = res?.response || res?.result?.response || {};
+        const items = (resp[l.entity] && resp[l.entity].items) || [];
         return [l.entity, items];
       } catch (e) {
         console.warn("Vacation Planner: get_items failed for", l.entity, e);
