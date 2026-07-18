@@ -8,36 +8,35 @@ class VacationPlannerCard extends HTMLElement {
     this._rendering = false;
   }
 
-  // Kategorie -> MDI-Icon (Material Design Icons; dieselbe Sammlung, die
-  // auch die icon-explorer-card durchsucht). Die Items tragen aus der
-  // Migration den Prefix "[Kategorie] Text"; das Icon macht die Kategorie
-  // sichtbar, ohne dass der Prefix als Text gezeigt werden muss.
+  // Kategorie -> buntes Unicode-Emoji. Die Items tragen aus der Migration
+  // den Prefix "[Kategorie] Text"; das Emoji macht die Kategorie sichtbar,
+  // ohne dass der Prefix als Text gezeigt werden muss.
   // Lookup-Keys sind normalisiert (lowercase, getrimmt, Whitespace kollabiert).
-  static CATEGORY_ICON = {
-    "dokumente & geld": "mdi:wallet-outline",
-    "kleidung": "mdi:tshirt-crew-outline",
-    "hygiene & gesundheit": "mdi:medical-bag",
-    "technik": "mdi:cellphone-link",
-    "reise-spezifisch – skandinavien-roadtrip": "mdi:road-variant",
-    "mit kindern (5 & 6 j.)": "mdi:human-child",
-    "sonstiges": "mdi:package-variant-closed",
-    "transport buchen": "mdi:ferry",
-    "tickets / aktivitäten vorab buchen": "mdi:ticket-confirmation-outline",
-    "versicherung & formalia": "mdi:shield-check-outline",
-    "organisieren": "mdi:clipboard-list-outline",
-    "vor abfahrt (19.07.)": "mdi:car-start",
+  static CATEGORY_EMOJI = {
+    "dokumente & geld": "💳",
+    "kleidung": "👕",
+    "hygiene & gesundheit": "🧴",
+    "technik": "🔌",
+    "reise-spezifisch – skandinavien-roadtrip": "🚗",
+    "mit kindern (5 & 6 j.)": "🧒",
+    "sonstiges": "🎒",
+    "transport buchen": "⛴️",
+    "tickets / aktivitäten vorab buchen": "🎟️",
+    "versicherung & formalia": "🛡️",
+    "organisieren": "📋",
+    "vor abfahrt (19.07.)": "🚦",
   };
-  static CATEGORY_ICON_FALLBACK = "mdi:checkbox-marked-circle-outline";
+  static CATEGORY_EMOJI_FALLBACK = "📝";
 
-  // Trennt "[Kategorie] Text" -> { icon, text }. Items ohne Prefix
-  // bekommen das Fallback-Icon und werden unverändert ausgegeben.
-  _categoryIcon(summary) {
+  // Trennt "[Kategorie] Text" -> { emoji, text }. Items ohne Prefix
+  // bekommen das Fallback-Emoji und werden unverändert ausgegeben.
+  _categoryEmoji(summary) {
     const m = /^\[([^\]]+)\]\s*(.*)$/.exec(summary || "");
-    if (!m) return { icon: VacationPlannerCard.CATEGORY_ICON_FALLBACK, text: summary || "" };
+    if (!m) return { emoji: VacationPlannerCard.CATEGORY_EMOJI_FALLBACK, text: summary || "" };
     const key = m[1].trim().toLowerCase().replace(/\s+/g, " ");
-    const icon = VacationPlannerCard.CATEGORY_ICON[key]
-      || VacationPlannerCard.CATEGORY_ICON_FALLBACK;
-    return { icon, text: m[2] };
+    const emoji = VacationPlannerCard.CATEGORY_EMOJI[key]
+      || VacationPlannerCard.CATEGORY_EMOJI_FALLBACK;
+    return { emoji, text: m[2] };
   }
 
   // --- Config --------------------------------------------------------------
@@ -179,24 +178,19 @@ class VacationPlannerCard extends HTMLElement {
     const root = this.attachShadow ? this._shadowRoot || this._ensureShadow()
                                     : this;
     // Wir verwenden ein Shadow-DOM für sauberes Styling mit HA-Variablen.
-    // Nur den Content-Container entfernen, nicht das ganze Shadow-Root —
+    // Nur den Root-Container entfernen, nicht das ganze Shadow-Root —
     // sonst würde der in _ensureShadow()/_injectStyles() einmalig injizierte
     // <style>-Block (HA-CSS-Variablen) bei jedem Re-Render gelöscht.
-    const oldContent = root.querySelector(".vp-card");
-    if (oldContent) oldContent.remove();
-    const wrap = document.createElement("div");
-    wrap.className = "vp-card";
-    const title = document.createElement("div");
-    title.className = "vp-title";
-    title.textContent = this.config.title;
-    wrap.appendChild(title);
-
+    const oldRoot = root.querySelector(".vp-root");
+    if (oldRoot) oldRoot.remove();
+    const rootDiv = document.createElement("div");
+    rootDiv.className = "vp-root";
+    // Jede Liste wird als EIGENE ha-card gerendert → separate Karten.
     this.config.lists.forEach(l => {
       const items = this._itemsByList[l.entity] || [];
-      wrap.appendChild(this._renderList(l, items));
+      rootDiv.appendChild(this._renderListCard(l, items));
     });
-
-    root.appendChild(wrap);
+    root.appendChild(rootDiv);
     this._rendering = false;
   }
 
@@ -211,38 +205,40 @@ class VacationPlannerCard extends HTMLElement {
     const style = document.createElement("style");
     style.textContent = `
       :host { display: block; }
-      .vp-card { font-family: var(--card-primary-font-family, inherit);
+      .vp-root { display:flex; flex-direction:column; gap:1rem;
+        font-family: var(--card-primary-font-family, inherit);
         color: var(--primary-text-color); }
-      .vp-title { font-size: 1.15rem; font-weight: 600; margin: 0 0 .5rem;
-        color: var(--primary-text-color); }
-      .vp-list { margin-bottom: 1.25rem;
-        border-top: 1px solid var(--divider-color, #eee); padding-top: .5rem; }
+      .vp-list-card { padding: 0; overflow: hidden; }
       .vp-list-head { display:flex; align-items:center; justify-content:space-between;
-        margin: .25rem 0 .5rem; }
-      .vp-list-name { display:flex; align-items:center; gap:.4rem; font-weight:600; }
+        padding:.8rem 1rem .5rem; }
+      .vp-list-name { display:flex; align-items:center; gap:.4rem; font-weight:600;
+        font-size:1.05rem; }
       .vp-progress { font-size: .85rem; color: var(--secondary-text-color); }
-      .vp-items { display:grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr));
+      .vp-card-content { padding: 0 1rem 1rem; }
+      .vp-items { display:grid; grid-template-columns: repeat(auto-fill, minmax(108px,1fr));
         gap:.5rem; }
-      .vp-tile { position:relative; display:flex; flex-direction:column;
-        align-items:center; gap:.35rem; padding:.7rem .5rem; border-radius:10px;
+      .vp-tile { position:relative; aspect-ratio: 1 / 1; display:flex;
+        flex-direction:column; align-items:center; justify-content:center;
+        gap:.3rem; padding:.6rem .4rem; border-radius:12px;
         cursor:pointer; text-align:center; background: var(--card-background-color, #fff);
         border: 1px solid var(--divider-color, #eee);
-        color: var(--primary-text-color); font-size:.82rem; line-height:1.2;
+        color: var(--primary-text-color); font-size:.8rem; line-height:1.15;
+        box-sizing: border-box;
         transition: border-color .15s, transform .05s; }
       .vp-tile:hover { border-color: var(--primary-color,#41BDF5); }
       .vp-tile:active { transform: scale(.97); }
-      .vp-tile ha-icon { --mdc-icon-size: 28px; color: var(--primary-color,#41BDF5); }
+      .vp-tile-emoji { font-size: 2rem; line-height:1; }
       .vp-tile-label { overflow:hidden; display:-webkit-box; -webkit-line-clamp:3;
         -webkit-box-orient:vertical; word-break: break-word; }
       .vp-tile.done { opacity:.45; }
-      .vp-tile.done ha-icon { color: var(--secondary-text-color); }
       .vp-tile.done .vp-tile-label { text-decoration: line-through; }
+      .vp-tile.done .vp-tile-emoji { filter: grayscale(1); }
       .vp-tile-del { position:absolute; top:.15rem; right:.25rem; background:none;
         border:none; color: var(--secondary-text-color); font-size:.7rem;
         opacity:0; cursor:pointer; padding:.1rem; line-height:1; }
       .vp-tile:hover .vp-tile-del { opacity:.55; }
       .vp-tile-del:hover { opacity:1; color: var(--error-color,#db4437); }
-      .vp-add { display:flex; gap:.4rem; margin-top:.5rem; }
+      .vp-add { display:flex; gap:.4rem; margin-top:.6rem; }
       .vp-add input { flex:1; padding:.5rem; border-radius:8px;
         border: 1px solid var(--divider-color,#ccc);
         background: var(--input-background-color, #fff);
@@ -258,9 +254,11 @@ class VacationPlannerCard extends HTMLElement {
     this.shadowRoot.appendChild(style);
   }
 
-  _renderList(list, items) {
-    const wrap = document.createElement("div");
-    wrap.className = "vp-list";
+  _renderListCard(list, items) {
+    const card = document.createElement("ha-card");
+    card.className = "vp-list-card";
+
+    // Kopf: Icon + Listenname + Fortschritt
     const head = document.createElement("div");
     head.className = "vp-list-head";
     const name = document.createElement("div");
@@ -274,18 +272,22 @@ class VacationPlannerCard extends HTMLElement {
     prog.className = "vp-progress";
     prog.textContent = done + "/" + items.length;
     head.appendChild(name); head.appendChild(prog);
-    wrap.appendChild(head);
+    card.appendChild(head);
+
+    // Content
+    const content = document.createElement("div");
+    content.className = "vp-card-content";
 
     if (items.length === 0) {
       const empty = document.createElement("div");
       empty.className = "vp-empty";
       empty.textContent = "Noch keine Einträge.";
-      wrap.appendChild(empty);
+      content.appendChild(empty);
     } else {
       const grid = document.createElement("div");
       grid.className = "vp-items";
       items.forEach(it => grid.appendChild(this._renderTile(list.entity, it)));
-      wrap.appendChild(grid);
+      content.appendChild(grid);
     }
 
     // Add-Row
@@ -300,7 +302,7 @@ class VacationPlannerCard extends HTMLElement {
     btn.addEventListener("click", submit);
     input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
     addRow.appendChild(input); addRow.appendChild(btn);
-    wrap.appendChild(addRow);
+    content.appendChild(addRow);
 
     // Clear-done
     if (done > 0) {
@@ -308,23 +310,25 @@ class VacationPlannerCard extends HTMLElement {
       clr.type = "button"; clr.className = "vp-clear";
       clr.textContent = "Erledigte entfernen (" + done + ")";
       clr.addEventListener("click", () => this._clearDone(list.entity));
-      wrap.appendChild(clr);
+      content.appendChild(clr);
     }
-    return wrap;
+    card.appendChild(content);
+    return card;
   }
 
   _renderTile(entity, item) {
-    // Kachel: MDI-Icon + bereinigter Text (ohne [Kategorie]-Prefix).
-    // Klick auf die Kachel toggelt erledigt; ✕ in der Ecke entfernt.
-    const { icon, text } = this._categoryIcon(item.summary);
+    // Quadratische Kachel: buntes Kategorie-Emoji + bereinigter Text
+    // (ohne [Kategorie]-Prefix). Klick toggelt erledigt; ✕ entfernt.
+    const { emoji, text } = this._categoryEmoji(item.summary);
     const done = item.status === "completed";
     const tile = document.createElement("button");
     tile.type = "button";
     tile.className = "vp-tile" + (done ? " done" : "");
     tile.title = item.summary; // vollständiger Originaltext im Tooltip
     tile.addEventListener("click", () => this._toggle(entity, item));
-    const iconEl = document.createElement("ha-icon");
-    iconEl.setAttribute("icon", icon);
+    const emojiEl = document.createElement("span");
+    emojiEl.className = "vp-tile-emoji";
+    emojiEl.textContent = emoji;
     const label = document.createElement("span");
     label.className = "vp-tile-label";
     label.textContent = text;
@@ -332,7 +336,7 @@ class VacationPlannerCard extends HTMLElement {
     del.type = "button"; del.className = "vp-tile-del"; del.textContent = "✕";
     del.title = "Entfernen";
     del.addEventListener("click", (e) => { e.stopPropagation(); this._remove(entity, item); });
-    tile.appendChild(iconEl); tile.appendChild(label); tile.appendChild(del);
+    tile.appendChild(emojiEl); tile.appendChild(label); tile.appendChild(del);
     return tile;
   }
 
