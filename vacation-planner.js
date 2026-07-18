@@ -59,18 +59,21 @@ class VacationPlannerCard extends HTMLElement {
   async _fetchItems(hass) {
     const results = await Promise.all(this.config.lists.map(async (l) => {
       try {
-        // return_response ist ein eigener Parameter von hass.callService
-        // (5. Argument), KEIN Feld in den Service-Daten – sonst meldet HA
-        // "Die Aktion erfordert Antworten und muss mit return_response=True
-        // aufgerufen werden". Response-Form: { response: { <entity_id>:
-        // { items: [...] } }, result: ... }.
-        const res = await hass.callService("todo", "get_items",
-          { entity_id: l.entity }, {}, true);
-        const resp = res?.response || res?.result?.response || {};
-        const items = (resp[l.entity] && resp[l.entity].items) || [];
+        // Kanonischer Weg für Custom-Cards: die WebSocket-Command
+        // "todo/item/list" (so macht es das offizielle HA-Todo-Card und
+        // jede funktionierende Community-Todo-Card). Liefert direkt
+        // { items: [{uid, summary, status, ...}] }.
+        // NICHT den Service todo.get_items via callService nutzen – der
+        // hat has_response=true und braucht return_response, das der
+        // Frontend-Helper nicht zuverlässig als 5. Parameter durchreicht.
+        // Symptom: HA-Toast "Die Aktion erfordert Antworten und muss mit
+        // return_response=True aufgerufen werden" + leere Card.
+        const result = await hass.callWS(
+          { type: "todo/item/list", entity_id: l.entity });
+        const items = (result && result.items) || [];
         return [l.entity, items];
       } catch (e) {
-        console.warn("Vacation Planner: get_items failed for", l.entity, e);
+        console.warn("Vacation Planner: todo/item/list failed for", l.entity, e);
         return [l.entity, []];
       }
     }));
