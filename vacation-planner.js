@@ -8,37 +8,51 @@ class VacationPlannerCard extends HTMLElement {
     this._rendering = false;
   }
 
-  // Kategorie -> buntes noto-Icon (Iconify-Set "noto", in HA über
+  // Universelle Default-Kategorie-Icons (Iconify-Set "noto", in HA über
   // thomasloven/hass-custom_icons als Prefix "noto:" registriert).
-  // Die Items tragen aus der Migration den Prefix "[Kategorie] Text";
-  // das Icon macht die Kategorie sichtbar, ohne dass der Prefix als Text
-  // gezeigt werden muss. Iconnamen via Iconify-API verifiziert.
-  // Lookup-Keys sind normalisiert (lowercase, getrimmt, Whitespace kollabiert).
-  static CATEGORY_ICON = {
-    "dokumente & geld": "noto:credit-card",
+  // Die Items tragen den Prefix "[Kategorie] Text"; das Icon macht die
+  // Kategorie sichtbar, ohne dass der Prefix als Text gezeigt wird.
+  // Keys sind bewusst KURZ und universell gehalten (packlisten-orientiert),
+  // damit die Card für JEDEN Urlaub funktioniert. Das Matching ist
+  // enthält-basiert (s. _categoryIcon): "transport buchen" → Key "transport".
+  // Für urlaubsspezifische Kategorien kann man im Dashboard-Config ein eigenes
+  // `category_icons`-Mapping hinterlegen (mergt über diese Defaults).
+  // Iconnamen via Iconify-API verifiziert.
+  static DEFAULT_CATEGORY_ICONS = {
+    "dokumente": "noto:credit-card",
+    "geld": "noto:money-bag",
     "kleidung": "noto:t-shirt",
-    "hygiene & gesundheit": "noto:medical-symbol",
+    "hygiene": "noto:soap",
+    "gesundheit": "noto:medical-symbol",
     "technik": "noto:electric-plug",
-    "reise-spezifisch – skandinavien-roadtrip": "noto:sport-utility-vehicle",
-    "mit kindern (5 & 6 j.)": "noto:child",
-    "sonstiges": "noto:package",
-    "transport buchen": "noto:ferry",
-    "tickets / aktivitäten vorab buchen": "noto:admission-tickets",
-    "versicherung & formalia": "noto:shield",
+    "transport": "noto:automobile",
+    "kinder": "noto:child",
+    "tickets": "noto:admission-tickets",
+    "aktivitäten": "noto:admission-tickets",
+    "versicherung": "noto:shield",
     "organisieren": "noto:clipboard",
-    "vor abfahrt (19.07.)": "noto:check-mark-button",
+    "abfahrt": "noto:check-mark-button",
+    "abreise": "noto:check-mark-button",
+    "sonstiges": "noto:package",
   };
-  static CATEGORY_ICON_FALLBACK = "noto:memo";
+  static DEFAULT_ICON = "noto:memo";
 
   // Trennt "[Kategorie] Text" -> { icon, text }. Items ohne Prefix
-  // bekommen das Fallback-Icon und werden unverändert ausgegeben.
+  // bekommen das Default-Icon und werden unverändert ausgegeben.
+  // Matching-Reihenfolge: (1) exakter Treffer im gemergten Map
+  // (User-category_icons über Defaults), (2) enthält-Treffer (längster
+  // Map-Key zuerst, damit spezifischere Keys Vorrang haben), (3) default_icon.
   _categoryIcon(summary) {
     const m = /^\[([^\]]+)\]\s*(.*)$/.exec(summary || "");
-    if (!m) return { icon: VacationPlannerCard.CATEGORY_ICON_FALLBACK, text: summary || "" };
-    const key = m[1].trim().toLowerCase().replace(/\s+/g, " ");
-    const icon = VacationPlannerCard.CATEGORY_ICON[key]
-      || VacationPlannerCard.CATEGORY_ICON_FALLBACK;
-    return { icon, text: m[2] };
+    const cat = m ? m[1].trim().toLowerCase().replace(/\s+/g, " ") : "";
+    const text = m ? m[2] : (summary || "");
+    if (cat) {
+      if (this._iconMap[cat]) return { icon: this._iconMap[cat], text };
+      for (const k of this._iconKeysSorted) {
+        if (cat.includes(k)) return { icon: this._iconMap[k], text };
+      }
+    }
+    return { icon: this._defaultIcon, text };
   }
 
   // --- Config --------------------------------------------------------------
@@ -61,6 +75,21 @@ class VacationPlannerCard extends HTMLElement {
       }
     }
     this.config = { title: config.title || "Urlaub", lists };
+    // Universelle Kategorie-Icons: Defaults + pro-Urlaub-Override (category_icons).
+    // User-Keys werden normalisiert (lowercase, Whitespace kollabiert), damit
+    // sie mit den normalisierten Kategorie-Strings aus den Items matchen.
+    const norm = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const userIcons = {};
+    if (config.category_icons && typeof config.category_icons === "object") {
+      for (const [k, v] of Object.entries(config.category_icons)) {
+        const nk = norm(k);
+        if (nk && typeof v === "string" && v) userIcons[nk] = v;
+      }
+    }
+    this._iconMap = { ...VacationPlannerCard.DEFAULT_CATEGORY_ICONS, ...userIcons };
+    this._iconKeysSorted = Object.keys(this._iconMap).sort((a, b) => b.length - a.length);
+    this._defaultIcon = (typeof config.default_icon === "string" && config.default_icon)
+      ? config.default_icon : VacationPlannerCard.DEFAULT_ICON;
     if (this._hass) this._fetchAndRender();
   }
 
@@ -352,10 +381,11 @@ class VacationPlannerCard extends HTMLElement {
     return tile;
   }
 
-  getStubConfig() { return { title: "Urlaub", lists: [
-    { entity: "todo.urlaub_packliste", name: "Packliste", icon: "mdi:bag-suitcase" },
-    { entity: "todo.urlaub_reise_todos", name: "Todos", icon: "mdi:clipboard-check" },
-  ]}; }
+  getStubConfig() { return {
+    entity: "todo.reise_packliste",
+    name: "Packliste",
+    icon: "noto:backpack",
+  }; }
 
   static getConfigElement() { return null; }
 }
@@ -364,5 +394,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "vacation-planner",
   name: "Vacation Planner",
-  description: "Urlaubs-Checklisten (Packliste + Todos) als realtime, mehrgeräte-fähige Card via HA todo.",
+  description: "Universelle Reise-Packliste / Checkliste als realtime, mehrgeräte-fähige HA-todo-Card. Kategorie-Icons via noto; pro Urlaub über category_icons konfigurierbar.",
 });
